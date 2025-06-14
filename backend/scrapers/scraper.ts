@@ -102,6 +102,23 @@ const getCacheDuration = () => {
   return hour >= 23 || hour <= 6 ? 30 * 60 * 1000 : 5 * 60 * 1000;
 };
 
+// Helper to parse date strings like 'Sunday 27 April' or 'Saturday 03 May' to 'YYYY-MM-DD'
+function parseMatchDate(dateStr: string): string | null {
+  // Remove weekday if present
+  const parts = dateStr.replace(/^(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)\s+/i, '').split(' ');
+  if (parts.length < 2) return null;
+  const day = parts[0].padStart(2, '0');
+  const monthName = parts[1].toLowerCase();
+  const monthMap: { [key: string]: string } = {
+    'january': '01', 'february': '02', 'march': '03', 'april': '04', 'may': '05', 'june': '06',
+    'july': '07', 'august': '08', 'september': '09', 'october': '10', 'november': '11', 'december': '12'
+  };
+  const month = monthMap[monthName];
+  if (!month) return null;
+  const year = new Date().getFullYear();
+  return `${year}-${month}-${day}`;
+}
+
 export async function scrapeGAAFixturesAndResults(): Promise<SupabaseMatch[]> {
   // Rate limiting check
   const now = Date.now();
@@ -334,7 +351,7 @@ export async function scrapeGAAFixturesAndResults(): Promise<SupabaseMatch[]> {
         let clicked = false;
         
         const selects = document.querySelectorAll('select');
-        for (const select of selects) {
+        for (const select of Array.from(selects)) {
           const options = Array.from(select.options);
           const aprilOption = options.find(opt => 
             String(opt.text || '').toLowerCase().includes('april') || 
@@ -354,12 +371,12 @@ export async function scrapeGAAFixturesAndResults(): Promise<SupabaseMatch[]> {
         
         if (!clicked) {
           const buttons = document.querySelectorAll('button, .btn, [role="button"]');
-          for (const button of buttons) {
+          for (const button of Array.from(buttons)) {
             const text = String(button.textContent || '').toLowerCase();
             
             if (text.includes('april') || text.includes('apr')) {
               console.log(`Found April button: "${button.textContent}"`);
-              (button as HTMLElement).click();
+              (button as any).click();
               clicked = true;
               break;
             }
@@ -368,14 +385,14 @@ export async function scrapeGAAFixturesAndResults(): Promise<SupabaseMatch[]> {
         
         if (!clicked) {
           const buttons = document.querySelectorAll('button, .btn, [role="button"]');
-          for (const button of buttons) {
+          for (const button of Array.from(buttons)) {
             const text = String(button.textContent || '').toLowerCase();
             const classes = String(button.className || '').toLowerCase();
             
             if (text.includes('‹') || text.includes('<') || text.includes('previous') || text.includes('prev') || 
                 classes.includes('prev') || classes.includes('back') || classes.includes('left')) {
               console.log(`Found backward navigation: "${button.textContent}" class="${button.className}"`);
-              (button as HTMLElement).click();
+              (button as any).click();
               clicked = true;
               break;
             }
@@ -391,7 +408,7 @@ export async function scrapeGAAFixturesAndResults(): Promise<SupabaseMatch[]> {
         
         const currentMonth = await page.evaluate(() => {
           const monthIndicators = document.querySelectorAll('[class*="month"], [class*="date"], .gar-matches-list__date');
-          for (const indicator of monthIndicators) {
+          for (const indicator of Array.from(monthIndicators)) {
             const text = String(indicator.textContent || '').toLowerCase();
             if (text.includes('april') || text.includes('apr')) {
               return 'april';
@@ -414,14 +431,14 @@ export async function scrapeGAAFixturesAndResults(): Promise<SupabaseMatch[]> {
           if (currentMonth === 'may' || currentMonth === 'june') {
             const clickedBack = await page.evaluate(() => {
               const buttons = document.querySelectorAll('button, .btn, [role="button"]');
-              for (const button of buttons) {
+              for (const button of Array.from(buttons)) {
                 const text = String(button.textContent || '').toLowerCase();
                 const classes = String(button.className || '').toLowerCase();
                 
                 if (text.includes('‹') || text.includes('<') || text.includes('previous') || text.includes('prev') || 
                     classes.includes('prev') || classes.includes('back') || classes.includes('left')) {
                   console.log(`Clicking backward to reach April: "${button.textContent}"`);
-                  (button as HTMLElement).click();
+                  (button as any).click();
                   return true;
                 }
               }
@@ -437,14 +454,14 @@ export async function scrapeGAAFixturesAndResults(): Promise<SupabaseMatch[]> {
           if (currentMonth === 'march') {
             const clickedForward = await page.evaluate(() => {
               const buttons = document.querySelectorAll('button, .btn, [role="button"]');
-              for (const button of buttons) {
+              for (const button of Array.from(buttons)) {
                 const text = String(button.textContent || '').toLowerCase();
                 const classes = String(button.className || '').toLowerCase();
                 
                 if (text.includes('›') || text.includes('>') || text.includes('next') || 
                     classes.includes('next') || classes.includes('forward') || classes.includes('right')) {
                   console.log(`Clicking forward to reach April: "${button.textContent}"`);
-                  (button as HTMLElement).click();
+                  (button as any).click();
                   return true;
                 }
               }
@@ -723,18 +740,28 @@ export async function scrapeGAAFixturesAndResults(): Promise<SupabaseMatch[]> {
     const matches: SupabaseMatch[] = [];
     for (const match of allMatches) {
       try {
+        // Convert date to YYYY-MM-DD
+        const parsedDate = parseMatchDate(match.date);
+        if (!parsedDate) {
+          console.error('Could not parse match date:', match.date);
+          continue;
+        }
+
+        // Handle empty time values
+        const matchTime = match.time?.trim() || null;
+        
         const storedMatch = await matchDatabase.upsertMatch({
           competition: match.competition,
           home_team: match.homeTeam,
           away_team: match.awayTeam,
-          home_score: match.homeScore ?? undefined,
-          away_score: match.awayScore ?? undefined,
-          venue: match.venue ?? undefined,
-          referee: match.referee ?? undefined,
-          match_date: match.date,
-          match_time: match.time ?? undefined,
+          home_score: match.homeScore?.trim() || null,
+          away_score: match.awayScore?.trim() || null,
+          venue: match.venue?.trim() || null,
+          referee: match.referee?.trim() || null,
+          match_date: parsedDate,
+          match_time: matchTime,
           is_fixture: match.isFixture,
-          broadcasting: match.broadcasting ?? undefined
+          broadcasting: match.broadcasting?.trim() || null
         });
         matches.push(storedMatch);
       } catch (error) {

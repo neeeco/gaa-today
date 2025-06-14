@@ -1,0 +1,57 @@
+{
+  "Dublin vs Derry": [
+    {
+      "minute": 70,
+      "home_team": "Dublin",
+      "home_score": "0-22",
+      "away_team": "Derry",
+      "away_score": "0-20",
+      "is_final": false,
+      "timestamp": "2025-06-14T20:20:55.508389"
+    }
+  ],
+  "Armagh vs Galway": [
+    {
+      "minute": 69,
+      "home_team": "Armagh",
+      "home_score": "0-27",
+      "away_team": "Galway",
+      "away_score": "2-21",
+      "is_final": true,
+      "timestamp": "2025-06-14T20:20:55.546253"
+    }
+  ],
+  "Fermanagh vs Sligo": [
+    {
+      "minute": 42,
+      "home_team": "Fermanagh",
+      "home_score": "0-14",
+      "away_team": "Sligo",
+      "away_score": "1-08",
+      "is_final": false,
+      "timestamp": "2025-06-14T20:20:56.240644"
+    }
+  ],
+  "Roscommon vs Cork": [
+    {
+      "minute": 70,
+      "home_team": "Roscommon",
+      "home_score": "0-17",
+      "away_team": "Cork",
+      "away_score": "0-19",
+      "is_final": false,
+      "timestamp": "2025-06-14T20:20:56.283289"
+    }
+  ],
+  "Meath vs Kerry": [
+    {
+      "minute": 67,
+      "home_team": "Meath",
+      "home_score": "1-21",
+      "away_team": "Kerry",
+      "away_score": "0-16",
+      "is_final": false,
+      "timestamp": "2025-06-14T20:20:56.319954"
+    }
+  ]
+}

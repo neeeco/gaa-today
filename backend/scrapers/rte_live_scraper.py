@@ -1,6 +1,20 @@
 from playwright.sync_api import sync_playwright
 import re, json, os
 from datetime import datetime
+from supabase import create_client, Client
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Initialize Supabase client
+supabase_url = os.environ.get('SUPABASE_URL')
+supabase_key = os.environ.get('SUPABASE_SERVICE_KEY')
+
+if not supabase_url or not supabase_key:
+    raise ValueError('Missing Supabase credentials')
+
+supabase: Client = create_client(supabase_url, supabase_key)
 
 def get_team_info(team_name):
     # Simple function to normalize team names
@@ -41,13 +55,58 @@ def extract_live_update_info(text):
             "away_team": away["name"],
             "away_score": away_score,
             "is_final": is_final,
+            "update_text": text,
             "timestamp": datetime.now().isoformat()
         }
 
     return None
 
-def generate_match_key(home, away):
-    return f"{home} vs {away}"
+def get_match_id(home_team: str, away_team: str) -> str:
+    try:
+        # Get today's date in YYYY-MM-DD format
+        today = datetime.now().strftime('%Y-%m-%d')
+        
+        # Clean team names
+        def clean_team_name(name: str) -> str:
+            return name.lower().strip()
+        
+        # Get all matches for today
+        result = supabase.table('matches')\
+            .select('id, home_team, away_team')\
+            .eq('match_date', today)\
+            .execute()
+            
+        if not result.data:
+            print(f"No matches found for today ({today})")
+            return None
+            
+        # Find the best match
+        for match in result.data:
+            if (clean_team_name(match['home_team']) == clean_team_name(home_team) and 
+                clean_team_name(match['away_team']) == clean_team_name(away_team)):
+                return match['id']
+                
+        print(f"Could not find match for {home_team} vs {away_team} on {today}")
+        return None
+    except Exception as e:
+        print(f"Error getting match ID: {e}")
+        return None
+
+def add_live_update(match_id: str, update_info: dict):
+    try:
+        data = {
+            'match_id': match_id,
+            'minute': update_info['minute'],
+            'home_score': update_info['home_score'],
+            'away_score': update_info['away_score'],
+            'update_text': update_info['update_text'],
+            'is_final': update_info['is_final']
+        }
+        result = supabase.table('live_updates').insert(data).execute()
+        return result.data
+    except Exception as e:
+        print(f"Error adding live update: {e}")
+        return None
 
 def scrape_rte_live_articles():
     urls = [
@@ -115,59 +174,18 @@ def scrape_rte_live_articles():
                             update_text = updates.nth(j).inner_text()
                             info = extract_live_update_info(update_text)
                             if info:
-                                # Only add if time does not go backwards
-                                match_key = None
-                                if info["home_team"] and info["away_team"]:
-                                    match_key = generate_match_key(info["home_team"], info["away_team"])
-                                elif info["is_halftime"]:
-                                    # Try to assign halftime to the last match_key if possible
-                                    if updates_by_match:
-                                        match_key = list(updates_by_match.keys())[-1]
-                                    else:
-                                        continue  # Skip if we don't know the teams
+                                # Get match ID from Supabase
+                                match_id = get_match_id(info['home_team'], info['away_team'])
+                                if match_id:
+                                    # Add live update to Supabase
+                                    add_live_update(match_id, info)
                                 else:
-                                    continue  # Skip null/unknown updates
-                                if match_key not in updates_by_match:
-                                    updates_by_match[match_key] = []
-                                    last_minute_by_match[match_key] = -1
-                                # Only add if minute is None (halftime) or >= last
-                                if info["minute"] is None or info["minute"] >= last_minute_by_match[match_key]:
-                                    updates_by_match[match_key].append(info)
-                                    if info["minute"] is not None:
-                                        last_minute_by_match[match_key] = info["minute"]
+                                    print(f"Could not find match ID for {info['home_team']} vs {info['away_team']}")
                     except Exception as e:
                         print(f"Error processing article: {str(e)}")  # Debug log
                         continue
 
         browser.close()
-
-    # Merge with existing JSON if file exists
-    output_path = "live_updates.json"
-    try:
-        if os.path.exists(output_path):
-            with open(output_path, "r") as f:
-                existing = json.load(f)
-        else:
-            existing = {}
-
-        # Combine updates while avoiding duplicates
-        for match, updates in updates_by_match.items():
-            if match not in existing:
-                existing[match] = []
-            existing_updates = existing[match]
-            existing_keys = {f"{u['minute']}-{u['home_score']}-{u['away_score']}" for u in existing_updates}
-
-            for update in updates:
-                key = f"{update['minute']}-{update['home_score']}-{update['away_score']}"
-                if key not in existing_keys:
-                    existing[match].append(update)
-
-        with open(output_path, "w") as f:
-            json.dump(existing, f, indent=2)
-
-        print(f"✅ Updated {output_path} with {sum(len(v) for v in existing.values())} total updates")
-    except Exception as e:
-        print(f"Error writing output file: {e}")
 
 if __name__ == "__main__":
     scrape_rte_live_articles()
