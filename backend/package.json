@@ -2,11 +2,12 @@
   "name": "gaa-today-backend",
   "version": "1.0.0",
   "description": "Backend API for GAA Today",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
   "scripts": {
     "start": "node dist/index.js",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "tsc",
+    "postinstall": "npm run build",
     "lint": "eslint . --ext .ts"
   },
   "dependencies": {
@@ -26,5 +27,8 @@
     "eslint": "^8.56.0",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   }
 }
