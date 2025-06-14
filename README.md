@@ -1,4 +1,4 @@
-# GAA Today
+ # GAA Today
 
 A modern full-stack application using Railway, Vercel, and Supabase.
 
