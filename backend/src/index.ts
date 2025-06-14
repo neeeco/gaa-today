@@ -9,7 +9,7 @@ dotenv.config();
 
 // Initialize Express app
 const app = express();
-const port = process.env.PORT || 3001;
+const port = process.env.PORT || 3002;
 
 // Initialize Supabase client
 const supabaseUrl = process.env.SUPABASE_URL;
